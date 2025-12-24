@@ -15,6 +15,7 @@ export default function HomeScreen() {
   const [selectedPersonality, setSelectedPersonality] = useState<PersonalityType | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [hasUser, setHasUser] = useState(false);
+  const [showPersonalitySelection, setShowPersonalitySelection] = useState(true);
 
   useEffect(() => {
     checkExistingUser();
@@ -27,10 +28,16 @@ export default function HomeScreen() {
 
       if (userId && personality) {
         setHasUser(true);
+        setSelectedPersonality(personality as PersonalityType);
+        setShowPersonalitySelection(false);
       }
     } catch (error) {
       console.error('Error checking existing user:', error);
     }
+  };
+
+  const handleChangePersonality = () => {
+    setShowPersonalitySelection(true);
   };
 
   const handleStartChat = async () => {
@@ -41,15 +48,24 @@ export default function HomeScreen() {
 
     setIsLoading(true);
     try {
-      // Generate a unique user ID
-      const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      let userId = await AsyncStorage.getItem('userId');
 
-      // Create user in backend
-      await apiService.createUser(userId, selectedPersonality);
+      // If user exists but personality changed, update it
+      if (hasUser && userId) {
+        await AsyncStorage.setItem('personality', selectedPersonality);
+        // Update backend with new personality
+        await apiService.createUser(userId, selectedPersonality);
+      } else {
+        // Generate a unique user ID for new user
+        userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Create user in backend
+        await apiService.createUser(userId, selectedPersonality);
 
-      // Store user data locally
-      await AsyncStorage.setItem('userId', userId);
-      await AsyncStorage.setItem('personality', selectedPersonality);
+        // Store user data locally
+        await AsyncStorage.setItem('userId', userId);
+        await AsyncStorage.setItem('personality', selectedPersonality);
+      }
 
       // Navigate to chat screen
       router.push('/chat');
@@ -124,14 +140,53 @@ export default function HomeScreen() {
           </>
         )}
 
+        {hasUser && !showPersonalitySelection && (
+          <ThemedView style={styles.currentPersonalityBox}>
+            <ThemedText type="subtitle" style={styles.currentPersonalityTitle}>
+              Current Personality: {PERSONALITIES.find(p => p.id === selectedPersonality)?.title}
+            </ThemedText>
+            <ThemedText style={styles.currentPersonalityDescription}>
+              {PERSONALITIES.find(p => p.id === selectedPersonality)?.description}
+            </ThemedText>
+            <TouchableOpacity
+              style={styles.changePersonalityButton}
+              onPress={handleChangePersonality}
+            >
+              <ThemedText style={styles.changePersonalityText}>
+                Change Personality
+              </ThemedText>
+            </TouchableOpacity>
+          </ThemedView>
+        )}
+
+        {hasUser && showPersonalitySelection && (
+          <>
+            <ThemedText type="subtitle" style={styles.sectionTitle}>
+              Choose Your Personality
+            </ThemedText>
+            <ThemedText style={styles.sectionDescription}>
+              Select a different personality to change your coaching style
+            </ThemedText>
+
+            {PERSONALITIES.map((personality) => (
+              <PersonalityCard
+                key={personality.id}
+                personality={personality}
+                isSelected={selectedPersonality === personality.id}
+                onSelect={() => setSelectedPersonality(personality.id)}
+              />
+            ))}
+          </>
+        )}
+
         <TouchableOpacity
           style={[styles.startButton, isLoading && styles.startButtonDisabled]}
-          onPress={hasUser ? handleContinueChat : handleStartChat}
-          disabled={isLoading || (!hasUser && !selectedPersonality)}
+          onPress={hasUser ? (showPersonalitySelection ? handleStartChat : handleContinueChat) : handleStartChat}
+          disabled={isLoading || (!hasUser && !selectedPersonality) || (hasUser && showPersonalitySelection && !selectedPersonality)}
           activeOpacity={0.8}
         >
           <ThemedText style={styles.startButtonText}>
-            {isLoading ? 'Starting...' : hasUser ? 'Continue Chat' : 'Start Chat'}
+            {isLoading ? 'Starting...' : (hasUser && !showPersonalitySelection) ? 'Continue Chat' : 'Start Chat'}
           </ThemedText>
         </TouchableOpacity>
 
@@ -238,5 +293,36 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 14,
     opacity: 0.6,
+  },
+  currentPersonalityBox: {
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 16,
+    backgroundColor: 'rgba(76, 205, 196, 0.1)',
+    borderWidth: 2,
+    borderColor: '#4ECDC4',
+  },
+  currentPersonalityTitle: {
+    fontSize: 18,
+    marginBottom: 8,
+    color: '#4ECDC4',
+  },
+  currentPersonalityDescription: {
+    fontSize: 14,
+    lineHeight: 20,
+    opacity: 0.8,
+    marginBottom: 12,
+  },
+  changePersonalityButton: {
+    backgroundColor: '#4ECDC4',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  changePersonalityText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

@@ -8,7 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  FlatList,
+  Animated,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -18,9 +18,11 @@ import { ThemedView } from '@/components/themed-view';
 import { ChatMessage } from '@/components/ChatMessage';
 import { LoadingIndicator } from '@/components/LoadingIndicator';
 import { QuickActionButton } from '@/components/QuickActionButton';
+import { CoinAnimation } from '@/components/CoinAnimation';
 import { Message } from '@/types';
 import apiService from '@/services/api';
 import { QUICK_ACTION_SUGGESTIONS } from '@/constants/personalities';
+import { getDirectFAQAnswer, getSuggestedQuestions, enrichPromptWithFAQ } from '@/services/ragService';
 
 export default function ChatScreen() {
   const router = useRouter();
@@ -30,6 +32,8 @@ export default function ChatScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [coins, setCoins] = useState(0);
+  const [showCoinAnimation, setShowCoinAnimation] = useState(false);
+  const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
 
   useEffect(() => {
     initializeChat();
@@ -88,18 +92,50 @@ export default function ChatScreen() {
     setIsLoading(true);
 
     try {
-      // Send message to backend
-      const response = await apiService.sendChatMessage(userId, textToSend);
+      // RAG: Check if we have a direct FAQ answer
+      const faqAnswer = getDirectFAQAnswer(textToSend);
+      
+      if (faqAnswer) {
+        // Use FAQ answer directly (faster, no API call needed)
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: `${faqAnswer}\n\n💡 *This answer is from our curated fitness FAQ*`,
+          timestamp: new Date(),
+        };
+        
+        setMessages((prev) => [...prev, assistantMessage]);
+        
+        // Still award coin and increment on backend
+        setShowCoinAnimation(true);
+        setCoins((prev) => prev + 1);
+        
+        // Get suggested follow-up questions
+        const suggestions = getSuggestedQuestions(textToSend);
+        setSuggestedQuestions(suggestions);
+      } else {
+        // Enrich prompt with FAQ context
+        const enrichedMessage = enrichPromptWithFAQ(textToSend);
+        
+        // Send message to backend (with enriched context)
+        const response = await apiService.sendChatMessage(userId, enrichedMessage);
 
-      // Add AI response to chat
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: response.response,
-        timestamp: new Date(),
-      };
+        // Add AI response to chat
+        const assistantMessage: Message = {
+          role: 'assistant',
+          content: response.response,
+          timestamp: new Date(),
+        };
 
-      setMessages((prev) => [...prev, assistantMessage]);
-      setCoins(response.coins);
+        setMessages((prev) => [...prev, assistantMessage]);
+        setCoins(response.coins);
+        
+        // Show coin animation
+        setShowCoinAnimation(true);
+        
+        // Get suggested follow-up questions
+        const suggestions = getSuggestedQuestions(textToSend);
+        setSuggestedQuestions(suggestions);
+      }
     } catch (error) {
       console.error('Error sending message:', error);
       Alert.alert('Error', 'Failed to send message. Please check your connection and try again.');
@@ -123,6 +159,11 @@ export default function ChatScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={100}
     >
+      <CoinAnimation 
+        show={showCoinAnimation} 
+        onComplete={() => setShowCoinAnimation(false)} 
+      />
+      
       <ThemedView style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
           <ThemedText style={styles.backButtonText}>←</ThemedText>
@@ -131,8 +172,16 @@ export default function ChatScreen() {
           <ThemedText type="subtitle" style={styles.headerTitle}>
             Fitness Coach
           </ThemedText>
-          <View style={styles.coinsContainer}>
-            <ThemedText style={styles.coinsText}>🪙 {coins}</ThemedText>
+          <View style={styles.headerActions}>
+            <TouchableOpacity 
+              onPress={() => router.push('/history')} 
+              style={styles.historyButton}
+            >
+              <ThemedText style={styles.historyButtonText}>📜</ThemedText>
+            </TouchableOpacity>
+            <View style={styles.coinsContainer}>
+              <ThemedText style={styles.coinsText}>🪙 {coins}</ThemedText>
+            </View>
           </View>
         </View>
       </ThemedView>
@@ -147,6 +196,28 @@ export default function ChatScreen() {
           <ChatMessage key={index} message={message} />
         ))}
         {isLoading && <LoadingIndicator />}
+
+        {suggestedQuestions.length > 0 && !isLoading && (
+          <View style={styles.suggestedQuestionsContainer}>
+            <ThemedText style={styles.suggestedQuestionsTitle}>
+              💡 Related questions:
+            </ThemedText>
+            {suggestedQuestions.map((question, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.suggestedQuestionButton}
+                onPress={() => {
+                  handleSendMessage(question);
+                  setSuggestedQuestions([]);
+                }}
+              >
+                <ThemedText style={styles.suggestedQuestionText}>
+                  {question}
+                </ThemedText>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         {messages.length === 1 && !isLoading && (
           <View style={styles.quickActionsContainer}>
@@ -216,6 +287,17 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  historyButton: {
+    padding: 4,
+  },
+  historyButtonText: {
+    fontSize: 24,
+  },
   coinsContainer: {
     backgroundColor: '#FFD700',
     paddingHorizontal: 12,
@@ -244,6 +326,28 @@ const styles = StyleSheet.create({
   quickActions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+  },
+  suggestedQuestionsContainer: {
+    paddingHorizontal: 16,
+    marginTop: 16,
+  },
+  suggestedQuestionsTitle: {
+    fontSize: 14,
+    opacity: 0.7,
+    marginBottom: 12,
+    fontWeight: '600',
+  },
+  suggestedQuestionButton: {
+    backgroundColor: 'rgba(78, 205, 196, 0.1)',
+    borderWidth: 1,
+    borderColor: '#4ECDC4',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+  },
+  suggestedQuestionText: {
+    fontSize: 14,
+    color: '#4ECDC4',
   },
   inputContainer: {
     flexDirection: 'row',

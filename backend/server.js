@@ -6,7 +6,7 @@ const mongoose = require('mongoose');
 
 const User = require('./models/User');
 const Chat = require('./models/Chat');
-const { generateChatResponse } = require('./services/openaiService');
+const { generateChatResponse } = require('./services/grokService'); // Changed from openaiService to grokService
 
 const app = express();
 const PORT = process.env.PORT || 3000;
