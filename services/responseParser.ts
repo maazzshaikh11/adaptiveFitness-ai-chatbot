@@ -40,7 +40,8 @@ export function parseWorkoutPlan(text: string): DayPlan[] | null {
   // 2. "Day 1 - Upper Body"
   // 3. "Monday - Leg Day"
   // 4. "Day 1: Chest"
-  const dayPattern = /(?:^|\n)(?:\*{0,2})(?:Day\s+\d+|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)(?:\s*[-:]\s*([^\n*]+))?(?:\*{0,2})[:\n]/gi;
+  // But NOT "**Meal Plan for Monday**" or "**Diet Plan**"
+  const dayPattern = /(?:^|\n)(?:\*{0,2})(?:Day\s+\d+|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)(?:\s*[-:]\s*(?!meal|diet)([^\n*]+))?(?:\*{0,2})[:\n]/gi;
   
   // Find all day headers
   let matches = [];
@@ -53,6 +54,8 @@ export function parseWorkoutPlan(text: string): DayPlan[] | null {
       focus: match[1]
     });
   }
+  
+  console.log('[Parser] Found', matches.length, 'day headers');
   
   if (matches.length < 1) {
     return null; // Not a workout plan
@@ -68,6 +71,8 @@ export function parseWorkoutPlan(text: string): DayPlan[] | null {
     const dayName = dayHeader.split(/[-:]/)[0].trim();
     const focus = currentMatch.focus ? currentMatch.focus.trim() : undefined;
     
+    console.log('[Parser] Processing day:', dayName, 'focus:', focus);
+    
     // Extract content between this day and next day (or end of text)
     const startIndex = currentMatch.index + currentMatch.fullMatch.length;
     const endIndex = nextMatch ? nextMatch.index : text.length;
@@ -75,6 +80,8 @@ export function parseWorkoutPlan(text: string): DayPlan[] | null {
     
     // Extract exercises
     const exercises = parseExercises(dayContent);
+    
+    console.log('[Parser] Found', exercises.length, 'exercises for', dayName);
     
     // Extract notes (usually at the end)
     const notesMatch = dayContent.match(/(?:note|tip|remember|cool-down)[:\s]*([^\n]+)/i);
@@ -106,9 +113,10 @@ function parseExercises(text: string): Exercise[] {
     const trimmed = line.trim();
     if (!trimmed || trimmed.length < 3) continue;
     
-    // Skip day headers and notes
+    // Skip day headers, notes, and meal plans
     if (trimmed.match(/^\*{0,2}(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Day\s+\d+)/i)) continue;
     if (trimmed.match(/^(?:note|tip|remember|cool-down):/i)) continue;
+    if (trimmed.match(/^\*{0,2}(?:meal|diet|nutrition)\s+plan/i)) continue; // Skip meal plan headers
     
     // Match: "* Push-ups - 3 sets x 15 reps"
     // Or: "* Warm-up: 5-10 minutes of light cardio"
@@ -117,6 +125,12 @@ function parseExercises(text: string): Exercise[] {
     
     if (exerciseMatch) {
       const content = exerciseMatch[1].trim();
+      
+      // Skip if it's a meal plan item or other non-exercise content
+      if (content.match(/^\*{0,2}(?:meal|diet|breakfast|lunch|dinner|snack|post|pre)(?:\s+workout)?(?:\s+meal)?/i)) {
+        continue;
+      }
+      
       const exercise = parseExerciseDetails(content);
       if (exercise) {
         exercises.push(exercise);
