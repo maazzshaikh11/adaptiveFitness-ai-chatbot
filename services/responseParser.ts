@@ -35,36 +35,54 @@ interface ParsedResponse {
 export function parseWorkoutPlan(text: string): DayPlan[] | null {
   const plans: DayPlan[] = [];
   
-  // Pattern 1: "Day 1:", "Day 2:", etc.
-  const dayPattern = /(?:^|\n)(?:##\s*)?(?:Day\s+\d+|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)(?:\s*-\s*([^\n]+))?[:\n]/gi;
-  const matches = text.match(dayPattern);
+  // Enhanced patterns to match various formats:
+  // 1. "**Monday: Chest and Triceps**"
+  // 2. "Day 1 - Upper Body"
+  // 3. "Monday - Leg Day"
+  // 4. "Day 1: Chest"
+  const dayPattern = /(?:^|\n)(?:\*{0,2})(?:Day\s+\d+|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)(?:\s*[-:]\s*([^\n*]+))?(?:\*{0,2})[:\n]/gi;
   
-  if (!matches || matches.length < 2) {
+  // Find all day headers
+  let matches = [];
+  let match;
+  const regex = new RegExp(dayPattern);
+  while ((match = regex.exec(text)) !== null) {
+    matches.push({
+      fullMatch: match[0],
+      index: match.index,
+      focus: match[1]
+    });
+  }
+  
+  if (matches.length < 1) {
     return null; // Not a workout plan
   }
   
-  // Split text by day headers
-  const sections = text.split(dayPattern).filter(s => s.trim());
-  
+  // Extract content for each day
   for (let i = 0; i < matches.length; i++) {
-    const dayHeader = matches[i].trim();
-    const dayContent = sections[i + 1] || '';
+    const currentMatch = matches[i];
+    const nextMatch = matches[i + 1];
     
-    // Extract day name and focus
-    const dayMatch = dayHeader.match(/(?:Day\s+\d+|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)(?:\s*-\s*([^\n:]+))?/i);
-    const day = dayMatch ? dayMatch[0].replace(/[:\n]/g, '').trim() : `Day ${i + 1}`;
-    const focus = dayMatch && dayMatch[1] ? dayMatch[1].trim() : undefined;
+    // Get day name and focus
+    const dayHeader = currentMatch.fullMatch.replace(/[\*:\n]/g, '').trim();
+    const dayName = dayHeader.split(/[-:]/)[0].trim();
+    const focus = currentMatch.focus ? currentMatch.focus.trim() : undefined;
+    
+    // Extract content between this day and next day (or end of text)
+    const startIndex = currentMatch.index + currentMatch.fullMatch.length;
+    const endIndex = nextMatch ? nextMatch.index : text.length;
+    const dayContent = text.substring(startIndex, endIndex);
     
     // Extract exercises
     const exercises = parseExercises(dayContent);
     
     // Extract notes (usually at the end)
-    const notesMatch = dayContent.match(/(?:note|tip|remember)[:\s]*([^\n]+)/i);
+    const notesMatch = dayContent.match(/(?:note|tip|remember|cool-down)[:\s]*([^\n]+)/i);
     const notes = notesMatch ? notesMatch[1].trim() : undefined;
     
     if (exercises.length > 0) {
       plans.push({
-        day,
+        day: dayName,
         focus,
         exercises,
         notes,
@@ -88,10 +106,14 @@ function parseExercises(text: string): Exercise[] {
     const trimmed = line.trim();
     if (!trimmed || trimmed.length < 3) continue;
     
-    // Match: "1. Push-ups - 3 sets x 15 reps"
-    // Or: "- Squats: 4 sets of 12 reps"
-    // Or: "• Plank (30 seconds)"
-    const exerciseMatch = trimmed.match(/^(?:\d+\.|\-|\•|\*)\s*(.+)/);
+    // Skip day headers and notes
+    if (trimmed.match(/^\*{0,2}(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Day\s+\d+)/i)) continue;
+    if (trimmed.match(/^(?:note|tip|remember|cool-down):/i)) continue;
+    
+    // Match: "* Push-ups - 3 sets x 15 reps"
+    // Or: "* Warm-up: 5-10 minutes of light cardio"
+    // Or: "1. Squats: 4 sets of 12 reps"
+    const exerciseMatch = trimmed.match(/^(?:\d+\.|\*|\-|\•)\s*(.+)/);
     
     if (exerciseMatch) {
       const content = exerciseMatch[1].trim();
@@ -109,7 +131,7 @@ function parseExercises(text: string): Exercise[] {
  * Parse individual exercise details
  */
 function parseExerciseDetails(text: string): Exercise | null {
-  // Extract name (before - or : or () )
+  // Extract name (before - or : or ( )
   const nameMatch = text.match(/^([^-:(]+)/);
   if (!nameMatch) return null;
   
@@ -118,22 +140,32 @@ function parseExerciseDetails(text: string): Exercise | null {
   
   const exercise: Exercise = { name };
   
-  // Extract sets
-  const setsMatch = text.match(/(\d+)\s*(?:sets?|x)/i);
+  // Extract sets - various patterns:
+  // "3 sets x 12 reps"
+  // "3 sets of 12 reps"
+  // "4 sets"
+  const setsMatch = text.match(/(\d+)\s*sets?/i);
   if (setsMatch) {
     exercise.sets = setsMatch[1];
   }
   
-  // Extract reps
-  const repsMatch = text.match(/(?:x\s*)?(\d+)\s*reps?/i);
+  // Extract reps - various patterns:
+  // "x 15 reps"
+  // "of 12 reps"
+  // "12 reps"
+  // "8-12 reps"
+  const repsMatch = text.match(/(?:x|of)?\s*(\d+(?:-\d+)?)\s*reps?/i);
   if (repsMatch) {
     exercise.reps = repsMatch[1];
   }
   
-  // Extract duration
-  const durationMatch = text.match(/(\d+\s*(?:seconds?|mins?|minutes?))/i);
+  // Extract duration - various patterns:
+  // "30 seconds"
+  // "5-10 minutes"
+  // "1 minute"
+  const durationMatch = text.match(/(\d+(?:-\d+)?)\s*(?:seconds?|mins?|minutes?)/i);
   if (durationMatch) {
-    exercise.duration = durationMatch[1];
+    exercise.duration = durationMatch[0];
   }
   
   // Extract notes (text in parentheses or after "Note:")
@@ -180,10 +212,13 @@ export function parseTipsList(text: string): { title?: string; tips: string[] } 
  * Determines response type and extracts structured content
  */
 export function parseAIResponse(text: string): ParsedResponse {
+  console.log('[Parser] Parsing response, length:', text.length);
+  
   // Try to parse workout plan
   const workoutPlans = parseWorkoutPlan(text);
   
   if (workoutPlans && workoutPlans.length > 0) {
+    console.log('[Parser] Found workout plan with', workoutPlans.length, 'days');
     return {
       type: 'workout_plan',
       text,
@@ -195,6 +230,7 @@ export function parseAIResponse(text: string): ParsedResponse {
   const tipsList = parseTipsList(text);
   
   if (tipsList && tipsList.tips.length > 0) {
+    console.log('[Parser] Found tips list with', tipsList.tips.length, 'tips');
     return {
       type: 'tips_list',
       text,
@@ -202,6 +238,7 @@ export function parseAIResponse(text: string): ParsedResponse {
     };
   }
   
+  console.log('[Parser] No structured content found, returning plain text');
   // Default to plain text
   return {
     type: 'text',
