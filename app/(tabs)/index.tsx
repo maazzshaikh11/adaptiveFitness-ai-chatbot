@@ -1,98 +1,242 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, View, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { PersonalityCard } from '@/components/PersonalityCard';
+import { PERSONALITIES } from '@/constants/personalities';
+import { PersonalityType } from '@/types';
+import apiService from '@/services/api';
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const router = useRouter();
+  const [selectedPersonality, setSelectedPersonality] = useState<PersonalityType | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasUser, setHasUser] = useState(false);
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
+  useEffect(() => {
+    checkExistingUser();
+  }, []);
+
+  const checkExistingUser = async () => {
+    try {
+      const userId = await AsyncStorage.getItem('userId');
+      const personality = await AsyncStorage.getItem('personality');
+
+      if (userId && personality) {
+        setHasUser(true);
+      }
+    } catch (error) {
+      console.error('Error checking existing user:', error);
+    }
+  };
+
+  const handleStartChat = async () => {
+    if (!selectedPersonality) {
+      Alert.alert('Select Personality', 'Please select your personality type to continue.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Generate a unique user ID
+      const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Create user in backend
+      await apiService.createUser(userId, selectedPersonality);
+
+      // Store user data locally
+      await AsyncStorage.setItem('userId', userId);
+      await AsyncStorage.setItem('personality', selectedPersonality);
+
+      // Navigate to chat screen
+      router.push('/chat');
+    } catch (error) {
+      console.error('Error starting chat:', error);
+      Alert.alert('Error', 'Failed to initialize. Please check if the backend server is running.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleContinueChat = () => {
+    router.push('/chat');
+  };
+
+  return (
+    <ScrollView style={styles.container}>
+      <ThemedView style={styles.content}>
+        <View style={styles.header}>
+          <ThemedText type="title" style={styles.title}>
+            💪 Fitness Companion
+          </ThemedText>
+          <ThemedText style={styles.subtitle}>
+            Your AI-powered adaptive fitness coach
+          </ThemedText>
+        </View>
+
+        <ThemedView style={styles.infoBox}>
+          <ThemedText type="subtitle" style={styles.infoTitle}>
+            ✓ What I Can Help With:
+          </ThemedText>
+          <ThemedText style={styles.infoText}>
+            • Create personalized workout plans{'\n'}
+            • Provide fitness tips and techniques{'\n'}
+            • Offer motivation and consistency advice{'\n'}
+            • Guide you on general wellness{'\n'}
+            • Answer fitness-related questions
+          </ThemedText>
+
+          <ThemedText type="subtitle" style={[styles.infoTitle, styles.warningTitle]}>
+            ✗ What I Cannot Do:
+          </ThemedText>
+          <ThemedText style={styles.warningText}>
+            • Provide medical advice{'\n'}
+            • Diagnose or treat injuries{'\n'}
+            • Recommend medications{'\n'}
+            • Replace professional healthcare
+          </ThemedText>
+
+          <ThemedText style={styles.disclaimer}>
+            For medical concerns, always consult a licensed healthcare professional.
+          </ThemedText>
+        </ThemedView>
+
+        {!hasUser && (
+          <>
+            <ThemedText type="subtitle" style={styles.sectionTitle}>
+              Choose Your Personality
+            </ThemedText>
+            <ThemedText style={styles.sectionDescription}>
+              This helps me adapt my coaching style to support you better
+            </ThemedText>
+
+            {PERSONALITIES.map((personality) => (
+              <PersonalityCard
+                key={personality.id}
+                personality={personality}
+                isSelected={selectedPersonality === personality.id}
+                onSelect={() => setSelectedPersonality(personality.id)}
+              />
+            ))}
+          </>
+        )}
+
+        <TouchableOpacity
+          style={[styles.startButton, isLoading && styles.startButtonDisabled]}
+          onPress={hasUser ? handleContinueChat : handleStartChat}
+          disabled={isLoading || (!hasUser && !selectedPersonality)}
+          activeOpacity={0.8}
+        >
+          <ThemedText style={styles.startButtonText}>
+            {isLoading ? 'Starting...' : hasUser ? 'Continue Chat' : 'Start Chat'}
+          </ThemedText>
+        </TouchableOpacity>
+
+        <View style={styles.footer}>
+          <ThemedText style={styles.footerText}>
+            Your fitness journey begins here 🚀
+          </ThemedText>
+        </View>
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    flex: 1,
   },
-  stepContainer: {
-    gap: 8,
+  content: {
+    padding: 20,
+    paddingTop: 60,
+  },
+  header: {
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
+    opacity: 0.7,
+    textAlign: 'center',
+  },
+  infoBox: {
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 24,
+    backgroundColor: 'rgba(76, 205, 196, 0.1)',
+    borderWidth: 1,
+    borderColor: '#4ECDC4',
+  },
+  infoTitle: {
+    fontSize: 18,
+    marginBottom: 12,
+    color: '#4ECDC4',
+  },
+  infoText: {
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  warningTitle: {
+    color: '#FF6B6B',
+  },
+  warningText: {
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 12,
+    opacity: 0.8,
+  },
+  disclaimer: {
+    fontSize: 12,
+    opacity: 0.6,
+    fontStyle: 'italic',
+    marginTop: 8,
+  },
+  sectionTitle: {
+    fontSize: 22,
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  sectionDescription: {
+    fontSize: 14,
+    opacity: 0.7,
+    marginBottom: 20,
+  },
+  startButton: {
+    backgroundColor: '#4ECDC4',
+    padding: 18,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  startButtonDisabled: {
+    opacity: 0.5,
+  },
+  startButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  footer: {
+    marginTop: 32,
+    marginBottom: 40,
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 14,
+    opacity: 0.6,
   },
 });
