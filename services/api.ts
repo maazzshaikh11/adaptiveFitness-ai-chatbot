@@ -1,7 +1,8 @@
 import { ChatResponse, LifestyleData, PersonalityType, User } from '@/types';
 
 const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.0.103:3000';
+  process.env.EXPO_PUBLIC_API_BASE_URL ||
+  'https://adaptive-fitness-bay.vercel.app';
 
 class ApiService {
   private requestCache: Map<string, { data: any; timestamp: number }> = new Map();
