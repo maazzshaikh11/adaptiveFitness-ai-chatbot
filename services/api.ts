@@ -1,6 +1,7 @@
-import { PersonalityType, ChatResponse, LifestyleData, User } from '@/types';
+import { ChatResponse, LifestyleData, PersonalityType, User } from '@/types';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:3000';
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.0.103:3000';
 
 class ApiService {
   private requestCache: Map<string, { data: any; timestamp: number }> = new Map();

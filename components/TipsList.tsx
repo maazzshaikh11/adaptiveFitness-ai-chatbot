@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
 
@@ -25,7 +25,9 @@ export function TipsList({ title, tips, icon = '💡' }: TipsListProps) {
             <View style={styles.bullet}>
               <View style={styles.bulletDot} />
             </View>
-            <ThemedText style={styles.tipText}>{tip}</ThemedText>
+            <ThemedText style={styles.tipText}>
+              {tip.replace(/\*\*/g, '')}
+            </ThemedText>
           </View>
         ))}
       </View>

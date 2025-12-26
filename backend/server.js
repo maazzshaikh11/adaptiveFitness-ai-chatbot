@@ -227,6 +227,6 @@ app.get('/api/users/:userId/coins', async (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+app.listen(3000, '0.0.0.0', () => {
+  console.log('🚀 Server running on http://0.0.0.0:3000');
 });

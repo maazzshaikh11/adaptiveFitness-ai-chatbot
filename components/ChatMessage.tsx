@@ -1,11 +1,15 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { ThemedText } from './themed-text';
-import { ThemedView } from './themed-view';
-import { WorkoutPlanCard } from './WorkoutPlanCard';
-import { TipsList } from './TipsList';
-import { Message } from '@/types';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+
 import { parseAIResponse } from '@/services/responseParser';
+import { Message } from '@/types';
+
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { TipsList } from '@/components/TipsList';
+import { WorkoutPlanCard } from '@/components/WorkoutPlanCard';
+import { ProgressTrackerCard } from '@/components/ui/ProgressTrackerCard';
 
 interface ChatMessageProps {
   message: Message;
@@ -14,24 +18,43 @@ interface ChatMessageProps {
 export function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === 'user';
 
-  // For assistant messages, try to parse structured content
+  // ✅ Step 1: Detect progress tracking table
+  const isProgressTable =
+    message.content.includes('Progress Tracking') ||
+    message.content.includes('| Day | Workout');
+
+  // ✅ Step 3: Render progress UI instead of raw table text
+  if (!isUser && isProgressTable) {
+    return (
+      <View style={[styles.container, styles.assistantContainer]}>
+        <ProgressTrackerCard />
+      </View>
+    );
+  }
+
+  // Handle structured AI responses
   if (!isUser) {
     const parsed = parseAIResponse(message.content);
-    
+
+    // Workout plan
     if (parsed.type === 'workout_plan' && parsed.workoutPlans) {
       return (
         <View style={[styles.container, styles.assistantContainer]}>
           <View style={styles.structuredContainer}>
-            {/* Show intro text if exists */}
-            {parsed.text.split(/(?:Day\s+\d+|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/i)[0].trim() && (
+            {parsed.text
+              ?.split(/(?:Day\s+\d+|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/i)[0]
+              ?.trim() && (
               <ThemedView style={[styles.bubble, styles.assistantBubble]}>
                 <ThemedText style={styles.text}>
-                  {parsed.text.split(/(?:Day\s+\d+|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/i)[0].trim()}
+                  {
+                    parsed.text.split(
+                      /(?:Day\s+\d+|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/i
+                    )[0].trim()
+                  }
                 </ThemedText>
               </ThemedView>
             )}
-            
-            {/* Render workout plan cards */}
+
             {parsed.workoutPlans.map((plan, index) => (
               <WorkoutPlanCard key={index} dayPlan={plan} />
             ))}
@@ -39,22 +62,27 @@ export function ChatMessage({ message }: ChatMessageProps) {
         </View>
       );
     }
-    
+
+    // Tips list
     if (parsed.type === 'tips_list' && parsed.tipsList) {
       return (
         <View style={[styles.container, styles.assistantContainer]}>
           <View style={styles.structuredContainer}>
-            {/* Show intro text if exists */}
-            {parsed.text.split(/(?:top\s+\d+\s+)?tips?[^\n:]*[:\n]/i)[0].trim() && (
+            {parsed.text
+              ?.split(/(?:top\s+\d+\s+)?tips?[\n:]/i)[0]
+              ?.trim() && (
               <ThemedView style={[styles.bubble, styles.assistantBubble]}>
                 <ThemedText style={styles.text}>
-                  {parsed.text.split(/(?:top\s+\d+\s+)?tips?[^\n:]*[:\n]/i)[0].trim()}
+                  {
+                    parsed.text.split(
+                      /(?:top\s+\d+\s+)?tips?[\n:]/i
+                    )[0].trim()
+                  }
                 </ThemedText>
               </ThemedView>
             )}
-            
-            {/* Render tips list */}
-            <TipsList 
+
+            <TipsList
               title={parsed.tipsList.title}
               tips={parsed.tipsList.tips}
             />
@@ -64,14 +92,39 @@ export function ChatMessage({ message }: ChatMessageProps) {
     }
   }
 
-  // Default rendering for regular messages
+  // Long-press copy
+  const onLongPress = async () => {
+    await Clipboard.setStringAsync(message.content || '');
+    Alert.alert('Copied', 'Message copied to clipboard');
+  };
+
+  // Default message rendering
   return (
-    <View style={[styles.container, isUser ? styles.userContainer : styles.assistantContainer]}>
-      <ThemedView style={[styles.bubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-        <ThemedText style={[styles.text, isUser && styles.userText]}>
-          {message.content}
-        </ThemedText>
-      </ThemedView>
+    <View
+      style={[
+        styles.container,
+        isUser ? styles.userContainer : styles.assistantContainer,
+      ]}
+    >
+      <Pressable onLongPress={onLongPress}>
+        <ThemedView
+          style={[
+            styles.bubble,
+            isUser ? styles.userBubble : styles.assistantBubble,
+          ]}
+        >
+          <ThemedText style={[styles.text, isUser && styles.userText]}>
+            {message.content}
+          </ThemedText>
+
+          <ThemedText style={styles.timestamp}>
+            {new Date(message.timestamp).toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </ThemedText>
+        </ThemedView>
+      </Pressable>
     </View>
   );
 }
@@ -79,7 +132,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
 const styles = StyleSheet.create({
   container: {
     marginVertical: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
   },
   userContainer: {
     alignItems: 'flex-end',
@@ -88,7 +141,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   bubble: {
-    maxWidth: '80%',
+    maxWidth: '85%',
     padding: 12,
     borderRadius: 16,
   },
@@ -97,7 +150,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
   },
   assistantBubble: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#f6f7f8',
     borderBottomLeftRadius: 4,
   },
   text: {
@@ -106,6 +159,12 @@ const styles = StyleSheet.create({
   },
   userText: {
     color: '#fff',
+  },
+  timestamp: {
+    fontSize: 10,
+    opacity: 0.6,
+    marginTop: 6,
+    textAlign: 'right',
   },
   structuredContainer: {
     width: '95%',

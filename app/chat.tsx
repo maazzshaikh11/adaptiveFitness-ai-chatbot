@@ -1,33 +1,36 @@
-import React, { useState, useEffect, useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  StyleSheet,
-  View,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
   Alert,
   Animated,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter, useLocalSearchParams } from 'expo-router';
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { ChatMessage } from '@/components/ChatMessage';
+import { CoinAnimation } from '@/components/CoinAnimation';
 import { LoadingIndicator } from '@/components/LoadingIndicator';
 import { QuickActionButton } from '@/components/QuickActionButton';
-import { CoinAnimation } from '@/components/CoinAnimation';
-import { Message } from '@/types';
-import apiService from '@/services/api';
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
 import { QUICK_ACTION_SUGGESTIONS } from '@/constants/personalities';
-import { getDirectFAQAnswer, getSuggestedQuestions, enrichPromptWithFAQ } from '@/services/ragService';
+import apiService from '@/services/api';
+import { enrichPromptWithFAQ, getDirectFAQAnswer, getSuggestedQuestions } from '@/services/ragService';
+import { Message } from '@/types';
 
 export default function ChatScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const scrollViewRef = useRef<ScrollView>(null);
+  const listRef = useRef<FlatList>(null);
+  const inputRef = useRef<TextInput>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -37,11 +40,10 @@ export default function ChatScreen() {
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'new' | 'view' | 'continue'>('new');
   const [initialized, setInitialized] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Only initialize once
     if (!initialized) {
-      // Check if loading a past chat
       if (params.chatId && params.mode) {
         loadPastChat(params.chatId as string, params.mode as string);
       } else {
@@ -49,14 +51,14 @@ export default function ChatScreen() {
       }
       setInitialized(true);
     }
-  }, [initialized]); // Remove params from dependency array
+  }, [initialized]);
 
   useEffect(() => {
-    // Scroll to bottom when messages change
     if (messages.length > 0) {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
+      listRef.current?.scrollToEnd({ animated: true });
+      Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
     }
-  }, [messages.length]); // Only depend on message count, not messages array
+  }, [messages.length]);
 
   const initializeChat = async () => {
     try {
@@ -71,15 +73,13 @@ export default function ChatScreen() {
 
       setUserId(storedUserId);
 
-      // Fetch user coins
       const userCoins = await apiService.getUserCoins(storedUserId);
       setCoins(userCoins);
 
-      // Add welcome message
       setMessages([
         {
           role: 'assistant',
-          content: `Hi there! 👋 I'm your adaptive fitness companion. I'm here to help you with workouts, fitness tips, and staying motivated on your fitness journey!\n\nFeel free to ask me anything about fitness, workouts, or wellness. What would you like to know?`,
+          content: `Hi there! 👋 I'm your adaptive fitness companion. I can help with workouts, short plans, and motivation. Ask me anything about fitness or tell me your goal.`,
           timestamp: new Date(),
         },
       ]);
@@ -93,24 +93,17 @@ export default function ChatScreen() {
     try {
       setIsLoading(true);
       const storedUserId = await AsyncStorage.getItem('userId');
-      
       if (!storedUserId) {
         Alert.alert('Error', 'User not found');
         router.replace('/');
         return;
       }
-
       setUserId(storedUserId);
-
-      // Fetch specific chat from backend
       const chat = await apiService.getSpecificChat(storedUserId, chatId);
-      
       if (chat && chat.messages) {
         setMessages(chat.messages);
         setViewMode(mode === 'continue' ? 'continue' : 'view');
       }
-
-      // Fetch user coins
       const userCoins = await apiService.getUserCoins(storedUserId);
       setCoins(userCoins);
     } catch (error) {
@@ -123,71 +116,37 @@ export default function ChatScreen() {
   };
 
   const handleSendMessage = async (messageText?: string) => {
-    const textToSend = messageText || inputText.trim();
-    
+    const textToSend = (messageText ?? inputText).trim();
     if (!textToSend || !userId) return;
 
-    // Add user message to chat
-    const userMessage: Message = {
-      role: 'user',
-      content: textToSend,
-      timestamp: new Date(),
-    };
-
+    const userMessage: Message = { role: 'user', content: textToSend, timestamp: new Date() };
     setMessages((prev) => [...prev, userMessage]);
     setInputText('');
+    inputRef.current?.blur();
     setIsLoading(true);
 
     try {
-      // RAG: Check if we have a direct FAQ answer
       const faqAnswer = getDirectFAQAnswer(textToSend);
-      
       if (faqAnswer) {
-        // Use FAQ answer directly (faster, no API call needed)
-        const assistantMessage: Message = {
-          role: 'assistant',
-          content: `${faqAnswer}\n\n💡 *This answer is from our curated fitness FAQ*`,
-          timestamp: new Date(),
-        };
-        
+        const assistantMessage: Message = { role: 'assistant', content: `${faqAnswer}\n\n💡 *This answer is from our curated fitness FAQ*`, timestamp: new Date() };
         setMessages((prev) => [...prev, assistantMessage]);
-        
-        // Still award coin and increment on backend
         setShowCoinAnimation(true);
         setCoins((prev) => prev + 1);
-        
-        // Get suggested follow-up questions
         const suggestions = getSuggestedQuestions(textToSend);
         setSuggestedQuestions(suggestions);
       } else {
-        // Enrich prompt with FAQ context
         const enrichedMessage = enrichPromptWithFAQ(textToSend);
-        
-        // Send message to backend (with enriched context)
         const response = await apiService.sendChatMessage(userId, enrichedMessage);
-
-        // Add AI response to chat
-        const assistantMessage: Message = {
-          role: 'assistant',
-          content: response.response,
-          timestamp: new Date(),
-        };
-
+        const assistantMessage: Message = { role: 'assistant', content: response.response, timestamp: new Date() };
         setMessages((prev) => [...prev, assistantMessage]);
         setCoins(response.coins);
-        
-        // Show coin animation
         setShowCoinAnimation(true);
-        
-        // Get suggested follow-up questions
         const suggestions = getSuggestedQuestions(textToSend);
         setSuggestedQuestions(suggestions);
       }
     } catch (error) {
       console.error('Error sending message:', error);
       Alert.alert('Error', 'Failed to send message. Please check your connection and try again.');
-      
-      // Remove the user message if sending failed
       setMessages((prev) => prev.filter((msg) => msg !== userMessage));
     } finally {
       setIsLoading(false);
@@ -195,92 +154,66 @@ export default function ChatScreen() {
   };
 
   const handleQuickAction = (suggestion: string) => {
-    // Remove emoji and send as message
     const cleanText = suggestion.replace(/[^\w\s-]/g, '').trim();
     handleSendMessage(cleanText);
   };
 
+  const renderItem = ({ item, index }: { item: Message; index: number }) => (
+    <ChatMessage message={item} />
+  );
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={100}
-    >
-      <CoinAnimation 
-        show={showCoinAnimation} 
-        onComplete={() => setShowCoinAnimation(false)} 
-      />
-      
-      {viewMode === 'view' && (
-        <ThemedView style={styles.viewModeBanner}>
-          <View style={styles.viewModeBannerContent}>
-            <ThemedText style={styles.viewModeText}>
-              📖 Viewing past conversation
-            </ThemedText>
-            <TouchableOpacity
-              style={styles.continueButton}
-              onPress={() => setViewMode('continue')}
-            >
-              <ThemedText style={styles.continueButtonText}>
-                Continue Chat
-              </ThemedText>
-            </TouchableOpacity>
-          </View>
-        </ThemedView>
-      )}
-      
-      <ThemedView style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <ThemedText style={styles.backButtonText}>←</ThemedText>
-        </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <ThemedText type="subtitle" style={styles.headerTitle}>
-            Fitness Coach
-          </ThemedText>
-          <View style={styles.headerActions}>
-            <TouchableOpacity 
-              onPress={() => router.push('/history')} 
-              style={styles.historyButton}
-            >
-              <ThemedText style={styles.historyButtonText}>📜</ThemedText>
-            </TouchableOpacity>
-            <View style={styles.coinsContainer}>
-              <ThemedText style={styles.coinsText}>🪙 {coins}</ThemedText>
+    <SafeAreaView style={styles.safe}>
+      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={100}>
+        <CoinAnimation show={showCoinAnimation} onComplete={() => setShowCoinAnimation(false)} />
+
+        {viewMode === 'view' && (
+          <ThemedView style={styles.viewModeBanner}>
+            <View style={styles.viewModeBannerContent}>
+              <ThemedText style={styles.viewModeText}>📖 Viewing past conversation</ThemedText>
+              <TouchableOpacity style={styles.continueButton} onPress={() => setViewMode('continue')}>
+                <ThemedText style={styles.continueButtonText}>Continue Chat</ThemedText>
+              </TouchableOpacity>
+            </View>
+          </ThemedView>
+        )}
+
+        <ThemedView style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} accessibilityLabel="Back">
+            <ThemedText style={styles.backButtonText}>←</ThemedText>
+          </TouchableOpacity>
+          <View style={styles.headerContent}>
+            <ThemedText type="subtitle" style={styles.headerTitle}>Fitness Coach</ThemedText>
+            <View style={styles.headerActions}>
+              <TouchableOpacity onPress={() => router.push('/history')} style={styles.historyButton} accessibilityLabel="History">
+                <ThemedText style={styles.historyButtonText}>📜</ThemedText>
+              </TouchableOpacity>
+              <View style={styles.coinsContainer} accessibilityLabel={`Coins ${coins}`}>
+                <ThemedText style={styles.coinsText}>🪙 {coins}</ThemedText>
+              </View>
             </View>
           </View>
-        </View>
-      </ThemedView>
+        </ThemedView>
 
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.messagesContainer}
-        contentContainerStyle={styles.messagesContent}
-        onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-      >
-        {messages.map((message, index) => (
-          <ChatMessage key={index} message={message} />
-        ))}
+        <FlatList
+          ref={listRef}
+          data={messages}
+          renderItem={renderItem}
+          keyExtractor={(item, idx) => `${item.role}-${idx}-${item.timestamp?.toString()}`}
+          contentContainerStyle={styles.messagesContent}
+          keyboardShouldPersistTaps="handled"
+        />
+
         {isLoading && <LoadingIndicator />}
 
         {suggestedQuestions.length > 0 && !isLoading && (
           <View style={styles.suggestedQuestionsContainer}>
-            <ThemedText style={styles.suggestedQuestionsTitle}>
-              💡 Related questions:
-            </ThemedText>
-            {suggestedQuestions.map((question, index) => (
-              <TouchableOpacity
-                key={index}
-                style={styles.suggestedQuestionButton}
-                onPress={() => {
-                  handleSendMessage(question);
-                  setSuggestedQuestions([]);
-                }}
-              >
-                <ThemedText style={styles.suggestedQuestionText}>
-                  {question}
-                </ThemedText>
-              </TouchableOpacity>
-            ))}
+            <ThemedText style={styles.suggestedQuestionsTitle}>💡 Related questions:</ThemedText>
+            <View style={styles.suggestedQuestionsList}>
+              {suggestedQuestions.map((q, i) => (
+                <QuickActionButton key={i} text={q} onPress={() => { handleSendMessage(q); setSuggestedQuestions([]); }} />
+              ))}
+            </View>
           </View>
         )}
 
@@ -289,199 +222,71 @@ export default function ChatScreen() {
             <ThemedText style={styles.quickActionsTitle}>Quick suggestions:</ThemedText>
             <View style={styles.quickActions}>
               {QUICK_ACTION_SUGGESTIONS.map((suggestion, index) => (
-                <QuickActionButton
-                  key={index}
-                  text={suggestion}
-                  onPress={() => handleQuickAction(suggestion)}
-                />
+                <QuickActionButton key={index} text={suggestion} onPress={() => handleQuickAction(suggestion)} />
               ))}
             </View>
           </View>
         )}
-      </ScrollView>
 
-      <ThemedView style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          placeholder={
-            viewMode === 'view' 
-              ? "Viewing past conversation..." 
-              : "Ask about fitness, workouts, or wellness..."
-          }
-          placeholderTextColor="#999"
-          value={inputText}
-          onChangeText={setInputText}
-          multiline
-          maxLength={500}
-          editable={viewMode !== 'view' && !isLoading}
-        />
-        <TouchableOpacity
-          style={[
-            styles.sendButton, 
-            (viewMode === 'view' || !inputText.trim() || isLoading) && styles.sendButtonDisabled
-          ]}
-          onPress={() => handleSendMessage()}
-          disabled={viewMode === 'view' || !inputText.trim() || isLoading}
-        >
-          <ThemedText style={styles.sendButtonText}>Send</ThemedText>
-        </TouchableOpacity>
-      </ThemedView>
-    </KeyboardAvoidingView>
+        <ThemedView style={styles.inputContainer}>
+          <TextInput
+            ref={inputRef}
+            style={styles.input}
+            placeholder={viewMode === 'view' ? "Viewing past conversation..." : "Ask about fitness, workouts, or wellness..."}
+            placeholderTextColor="#999"
+            value={inputText}
+            onChangeText={setInputText}
+            multiline
+            maxLength={800}
+            editable={viewMode !== 'view' && !isLoading}
+            returnKeyType="send"
+            onSubmitEditing={() => handleSendMessage()}
+            accessibilityLabel="Message input"
+          />
+
+          <Pressable
+            style={[styles.sendButton, (viewMode === 'view' || !inputText.trim() || isLoading) && styles.sendButtonDisabled]}
+            onPress={() => handleSendMessage()}
+            disabled={viewMode === 'view' || !inputText.trim() || isLoading}
+            accessibilityRole="button"
+            accessibilityLabel="Send message"
+          >
+            <ThemedText style={styles.sendButtonText}>{isLoading ? '...' : 'Send'}</ThemedText>
+          </Pressable>
+        </ThemedView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  viewModeBanner: {
-    backgroundColor: 'rgba(78, 205, 196, 0.1)',
-    borderBottomWidth: 1,
-    borderBottomColor: '#4ECDC4',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingTop: 60,
-  },
-  viewModeBannerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  viewModeText: {
-    fontSize: 14,
-    color: '#4ECDC4',
-    fontWeight: '600',
-  },
-  continueButton: {
-    backgroundColor: '#4ECDC4',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  continueButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  backButton: {
-    marginRight: 12,
-  },
-  backButtonText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-  },
-  headerContent: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 20,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  historyButton: {
-    padding: 4,
-  },
-  historyButtonText: {
-    fontSize: 24,
-  },
-  coinsContainer: {
-    backgroundColor: '#FFD700',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  coinsText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  messagesContainer: {
-    flex: 1,
-  },
-  messagesContent: {
-    paddingVertical: 16,
-  },
-  quickActionsContainer: {
-    paddingHorizontal: 16,
-    marginTop: 20,
-  },
-  quickActionsTitle: {
-    fontSize: 14,
-    opacity: 0.6,
-    marginBottom: 12,
-  },
-  quickActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  suggestedQuestionsContainer: {
-    paddingHorizontal: 16,
-    marginTop: 16,
-  },
-  suggestedQuestionsTitle: {
-    fontSize: 14,
-    opacity: 0.7,
-    marginBottom: 12,
-    fontWeight: '600',
-  },
-  suggestedQuestionButton: {
-    backgroundColor: 'rgba(78, 205, 196, 0.1)',
-    borderWidth: 1,
-    borderColor: '#4ECDC4',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-  },
-  suggestedQuestionText: {
-    fontSize: 14,
-    color: '#4ECDC4',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    padding: 16,
-    paddingBottom: Platform.OS === 'ios' ? 32 : 16,
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    alignItems: 'flex-end',
-  },
-  input: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginRight: 12,
-    fontSize: 16,
-    maxHeight: 100,
-  },
-  sendButton: {
-    backgroundColor: '#4ECDC4',
-    borderRadius: 24,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sendButtonDisabled: {
-    opacity: 0.5,
-  },
-  sendButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  safe: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1 },
+  viewModeBanner: { backgroundColor: 'rgba(78,205,196,0.08)', borderBottomWidth: 1, borderBottomColor: '#4ECDC4', paddingHorizontal: 16, paddingVertical: 12 },
+  viewModeBannerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  viewModeText: { fontSize: 14, color: '#4ECDC4', fontWeight: '600' },
+  continueButton: { backgroundColor: '#4ECDC4', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16 },
+  continueButtonText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  backButton: { marginRight: 12 },
+  backButtonText: { fontSize: 26, fontWeight: '700' },
+  headerContent: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '700' },
+  headerActions: { flexDirection: 'row', alignItems: 'center' },
+  historyButton: { padding: 6 },
+  historyButtonText: { fontSize: 20 },
+  coinsContainer: { backgroundColor: '#FFD700', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14 },
+  coinsText: { fontSize: 14, fontWeight: '700' },
+  messagesContent: { paddingHorizontal: 12, paddingBottom: 12, paddingTop: 6 },
+  quickActionsContainer: { paddingHorizontal: 16, marginTop: 10 },
+  quickActionsTitle: { fontSize: 14, opacity: 0.7, marginBottom: 8 },
+  quickActions: { flexDirection: 'row', flexWrap: 'wrap' },
+  suggestedQuestionsContainer: { paddingHorizontal: 16, marginTop: 8 },
+  suggestedQuestionsTitle: { fontSize: 14, opacity: 0.8, marginBottom: 8, fontWeight: '600' },
+  suggestedQuestionsList: { flexDirection: 'row', flexWrap: 'wrap' },
+  inputContainer: { flexDirection: 'row', padding: 12, paddingBottom: Platform.OS === 'ios' ? 24 : 12, borderTopWidth: 1, borderTopColor: '#eee', alignItems: 'flex-end' },
+  input: { flex: 1, backgroundColor: '#f7f7f8', borderRadius: 22, paddingHorizontal: 14, paddingVertical: 10, fontSize: 16, maxHeight: 120 },
+  sendButton: { backgroundColor: '#4ECDC4', borderRadius: 22, paddingHorizontal: 18, paddingVertical: 10, justifyContent: 'center', alignItems: 'center', marginLeft: 8 },
+  sendButtonDisabled: { opacity: 0.5 },
+  sendButtonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
