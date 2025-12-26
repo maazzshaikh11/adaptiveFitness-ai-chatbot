@@ -1,11 +1,3 @@
-Great project. The content is strong — it just needs to be **shorter, clearer, and recruiter-oriented**.
-Recruiters skim. They don’t read docs like assignments.
-
-Below is a **clean, recruiter-friendly README** you can **replace your current one with**.
-It keeps the important ideas but removes academic verbosity.
-
----
-
 # 🏋️ Adaptive Fitness Companion Chatbot
 
 An AI-powered fitness chatbot built with **React Native (Expo)** and **Node.js**, designed to deliver **personalized coaching** based on user personality, activity data, and usage patterns.
