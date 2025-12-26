@@ -381,4 +381,3 @@ Created for the React Native + OpenAI API assignment.
 **Note**: Remember to never commit your `.env` files with actual API keys!
 
 # adaptiveFitness
-# adaptiveFitness
