@@ -15,6 +15,7 @@ import {
   View
 } from 'react-native';
 
+import { WorkoutPlanCard } from '@/components/WorkoutPlanCard';
 import { ChatMessage } from '@/components/ChatMessage';
 import { CoinAnimation } from '@/components/CoinAnimation';
 import { LoadingIndicator } from '@/components/LoadingIndicator';
@@ -25,6 +26,7 @@ import { QUICK_ACTION_SUGGESTIONS } from '@/constants/personalities';
 import apiService from '@/services/api';
 import { enrichPromptWithFAQ, getDirectFAQAnswer, getSuggestedQuestions } from '@/services/ragService';
 import { Message } from '@/types';
+
 
 export default function ChatScreen() {
   const router = useRouter();
@@ -116,42 +118,73 @@ export default function ChatScreen() {
   };
 
   const handleSendMessage = async (messageText?: string) => {
-    const textToSend = (messageText ?? inputText).trim();
-    if (!textToSend || !userId) return;
+  const textToSend = (messageText ?? inputText).trim();
+  if (!textToSend || !userId) return;
 
-    const userMessage: Message = { role: 'user', content: textToSend, timestamp: new Date() };
-    setMessages((prev) => [...prev, userMessage]);
-    setInputText('');
-    inputRef.current?.blur();
-    setIsLoading(true);
-
-    try {
-      const faqAnswer = getDirectFAQAnswer(textToSend);
-      if (faqAnswer) {
-        const assistantMessage: Message = { role: 'assistant', content: `${faqAnswer}\n\n💡 *This answer is from our curated fitness FAQ*`, timestamp: new Date() };
-        setMessages((prev) => [...prev, assistantMessage]);
-        setShowCoinAnimation(true);
-        setCoins((prev) => prev + 1);
-        const suggestions = getSuggestedQuestions(textToSend);
-        setSuggestedQuestions(suggestions);
-      } else {
-        const enrichedMessage = enrichPromptWithFAQ(textToSend);
-        const response = await apiService.sendChatMessage(userId, enrichedMessage);
-        const assistantMessage: Message = { role: 'assistant', content: response.response, timestamp: new Date() };
-        setMessages((prev) => [...prev, assistantMessage]);
-        setCoins(response.coins);
-        setShowCoinAnimation(true);
-        const suggestions = getSuggestedQuestions(textToSend);
-        setSuggestedQuestions(suggestions);
-      }
-    } catch (error) {
-      console.error('Error sending message:', error);
-      Alert.alert('Error', 'Failed to send message. Please check your connection and try again.');
-      setMessages((prev) => prev.filter((msg) => msg !== userMessage));
-    } finally {
-      setIsLoading(false);
-    }
+  const userMessage: Message = {
+    role: 'user',
+    content: textToSend,
+    timestamp: new Date(),
   };
+
+  setMessages((prev) => [...prev, userMessage]);
+  setInputText('');
+  inputRef.current?.blur();
+  setIsLoading(true);
+
+  try {
+    const isWorkoutPlanQuery =
+      /workout plan|training plan|exercise plan|beginner workout|gym plan|fitness plan/i.test(
+        textToSend
+      );
+
+    const faqAnswer = getDirectFAQAnswer(textToSend);
+
+    // ✅ FAQ ONLY for non-plan questions
+    if (faqAnswer && !isWorkoutPlanQuery) {
+      const assistantMessage: Message = {
+        role: 'assistant',
+        content: `${faqAnswer}\n\n💡 *This answer is from our curated fitness FAQ*`,
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+      setShowCoinAnimation(true);
+      setCoins((prev) => prev + 1);
+
+      const suggestions = getSuggestedQuestions(textToSend);
+      setSuggestedQuestions(suggestions);
+    } else {
+      // ✅ Workout plans ALWAYS go to AI
+      const enrichedMessage = enrichPromptWithFAQ(textToSend);
+     const response = await apiService.sendChatMessage(userId, enrichedMessage);
+
+    const isWorkoutPlan =/day\s*1|monday|upper body|lower body/i.test(response.response);
+
+    const assistantMessage: Message = {
+      role: 'assistant',
+      content: response.response,
+      timestamp: new Date(),
+      type: isWorkoutPlan ? 'workout_plan' : 'text',
+    };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      setCoins(response.coins);
+      setShowCoinAnimation(true);
+
+      const suggestions = getSuggestedQuestions(textToSend);
+      setSuggestedQuestions(suggestions);
+    }
+  } catch (error) {
+    console.error('Error sending message:', error);
+    Alert.alert('Error', 'Failed to send message. Please check your connection and try again.');
+    setMessages((prev) => prev.filter((msg) => msg !== userMessage));
+  } finally {
+    setIsLoading(false);
+  }
+};
+
 
   const handleQuickAction = (suggestion: string) => {
     const cleanText = suggestion.replace(/[^\w\s-]/g, '').trim();

@@ -4,7 +4,9 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  type?: 'text' | 'workout_plan' | 'tips';
 }
+
 
 export interface LifestyleData {
   steps: number;

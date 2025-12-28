@@ -1,6 +1,6 @@
+import * as Clipboard from 'expo-clipboard';
 import React from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
 
 import { parseAIResponse } from '@/services/responseParser';
 import { Message } from '@/types';
@@ -8,8 +8,8 @@ import { Message } from '@/types';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { TipsList } from '@/components/TipsList';
+import { ProgressTrackerCard } from '@/components/ProgressTrackerCard';
 import { WorkoutPlanCard } from '@/components/WorkoutPlanCard';
-import { ProgressTrackerCard } from '@/components/ui/ProgressTrackerCard';
 
 interface ChatMessageProps {
   message: Message;
@@ -18,13 +18,13 @@ interface ChatMessageProps {
 export function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === 'user';
 
-  // ✅ Step 1: Detect progress tracking table
+  // 🟢 1. Detect progress tracker table
   const isProgressTable =
-    message.content.includes('Progress Tracking') ||
-    message.content.includes('| Day | Workout');
+    !isUser &&
+    message.content.includes('Weekly Progress') &&
+    message.content.includes('Water Intake');
 
-  // ✅ Step 3: Render progress UI instead of raw table text
-  if (!isUser && isProgressTable) {
+  if (isProgressTable) {
     return (
       <View style={[styles.container, styles.assistantContainer]}>
         <ProgressTrackerCard />
@@ -32,29 +32,15 @@ export function ChatMessage({ message }: ChatMessageProps) {
     );
   }
 
-  // Handle structured AI responses
+  // 🟢 2. Structured AI parsing (ONLY for assistant)
   if (!isUser) {
     const parsed = parseAIResponse(message.content);
 
-    // Workout plan
-    if (parsed.type === 'workout_plan' && parsed.workoutPlans) {
+    // 🟢 Workout Plan (cards only)
+    if (parsed.type === 'workout_plan' && parsed.workoutPlans?.length) {
       return (
         <View style={[styles.container, styles.assistantContainer]}>
           <View style={styles.structuredContainer}>
-            {parsed.text
-              ?.split(/(?:Day\s+\d+|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/i)[0]
-              ?.trim() && (
-              <ThemedView style={[styles.bubble, styles.assistantBubble]}>
-                <ThemedText style={styles.text}>
-                  {
-                    parsed.text.split(
-                      /(?:Day\s+\d+|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/i
-                    )[0].trim()
-                  }
-                </ThemedText>
-              </ThemedView>
-            )}
-
             {parsed.workoutPlans.map((plan, index) => (
               <WorkoutPlanCard key={index} dayPlan={plan} />
             ))}
@@ -63,42 +49,26 @@ export function ChatMessage({ message }: ChatMessageProps) {
       );
     }
 
-    // Tips list
+    // 🟢 Tips List
     if (parsed.type === 'tips_list' && parsed.tipsList) {
       return (
         <View style={[styles.container, styles.assistantContainer]}>
-          <View style={styles.structuredContainer}>
-            {parsed.text
-              ?.split(/(?:top\s+\d+\s+)?tips?[\n:]/i)[0]
-              ?.trim() && (
-              <ThemedView style={[styles.bubble, styles.assistantBubble]}>
-                <ThemedText style={styles.text}>
-                  {
-                    parsed.text.split(
-                      /(?:top\s+\d+\s+)?tips?[\n:]/i
-                    )[0].trim()
-                  }
-                </ThemedText>
-              </ThemedView>
-            )}
-
-            <TipsList
-              title={parsed.tipsList.title}
-              tips={parsed.tipsList.tips}
-            />
-          </View>
+          <TipsList
+            title={parsed.tipsList.title}
+            tips={parsed.tipsList.tips}
+          />
         </View>
       );
     }
   }
 
-  // Long-press copy
+  // 🟢 3. Long-press copy
   const onLongPress = async () => {
     await Clipboard.setStringAsync(message.content || '');
     Alert.alert('Copied', 'Message copied to clipboard');
   };
 
-  // Default message rendering
+  // 🟢 4. Default fallback bubble (ONLY when no structured UI matched)
   return (
     <View
       style={[
@@ -128,6 +98,7 @@ export function ChatMessage({ message }: ChatMessageProps) {
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
