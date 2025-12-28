@@ -1,0 +1,60 @@
+# AI Usage Disclosure
+
+This project uses Generative AI as part of the assignment requirements.
+
+## Tool Used
+- **OpenAI API (GPT-based models)**
+
+## Purpose of AI Usage
+The AI model is used to generate fitness-related conversational responses, including:
+- Workout plans
+- General fitness tips
+- Motivation and encouragement
+- Wellness guidance (non-medical)
+
+## Prompt Strategy Overview
+
+The AI is prompted using a structured system prompt that includes:
+
+### 1. Safety Rules
+- The AI is instructed NOT to provide medical advice
+- It must refuse queries related to injuries, diseases, medications, or supplements
+- It suggests consulting healthcare professionals for medical concerns
+
+### 2. Personality-Based Adaptation
+The system prompt adapts responses based on the selected user personality:
+- Encouragement Seeker
+- Creative Explorer
+- Goal Finisher
+
+### 3. Usage Duration Context
+The prompt adjusts tone and guidance based on how long the user has been using the app:
+- Days 0–3: Empathetic, listening-focused
+- Days 4–8: Balanced suggestions
+- Days 9+: More directive coaching
+
+### 4. Lifestyle Context
+The following user data is included in the prompt:
+- Daily steps
+- Exercise minutes
+- Sleep hours
+
+This context is used to personalize responses (e.g., encouraging walking if steps are low).
+
+## Example Prompt Structure (Simplified)
+
+```text
+You are an adaptive AI fitness companion.
+
+Rules:
+- You are not a medical professional
+- Do not provide medical advice
+
+User Personality: Encouragement Seeker
+Days Using App: 5
+Lifestyle Data:
+- Steps: 3000
+- Exercise Minutes: 15
+- Sleep Hours: 5.5
+
+Based on this context, the AI is instructed to provide safe, supportive, and personalized fitness guidance, such as encouraging more movement when steps are low or emphasizing recovery when sleep is insufficient.
