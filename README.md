@@ -1,6 +1,13 @@
+Perfect — here’s a **fully updated, recruiter-ready README.md**, aligned **line-by-line with the assignment**, clean, professional, and submission-safe.
+You can **replace your current README completely with this** 👇
+
+---
+
 # 🏋️ Adaptive Fitness Companion Chatbot
 
-An AI-powered fitness chatbot built with **React Native (Expo)** and **Node.js**, designed to deliver **personalized coaching** based on user personality, activity data, and usage patterns.
+**(React Native + OpenAI API)**
+
+An AI-powered, mobile-first fitness chatbot built with **React Native (Expo)** and **Node.js**, designed to deliver **personalized, adaptive coaching** based on user personality, app usage duration, and basic lifestyle context.
 
 🔗 **Live Frontend:** [https://adaptive-fitness-rprr.vercel.app](https://adaptive-fitness-rprr.vercel.app)
 🔗 **Live Backend:** [https://adaptive-fitness-bay.vercel.app](https://adaptive-fitness-bay.vercel.app)
@@ -9,73 +16,141 @@ An AI-powered fitness chatbot built with **React Native (Expo)** and **Node.js**
 
 ## 🚀 Overview
 
-Adaptive Fitness Companion is a mobile-first AI chatbot that adapts its coaching style dynamically using:
+Adaptive Fitness Companion is an intelligent fitness chatbot that simulates a real personal coach.
+Instead of giving generic answers, the chatbot **adapts its tone, structure, and guidance dynamically** using:
 
 * User personality type
 * App usage duration
-* Lifestyle data (steps, exercise time, sleep)
+* Lifestyle data (steps, exercise time, sleep hours)
 
-The goal is to simulate a **real fitness coach**—motivational, structured, or creative—depending on the user.
+⚠️ **Important:** This app is **not a medical tool** and strictly avoids medical advice.
+
+---
+
+## ✅ Assignment Alignment
+
+This project was built **strictly according to the assignment requirements**, including:
+
+* Expo **Managed Workflow only** (no eject)
+* Node.js **v20.x (LTS)** backend using Express
+* MongoDB database for chat history
+* Adaptive AI behavior using:
+
+  * Personality
+  * Usage duration
+  * Lifestyle context
+* Safety guardrails preventing medical advice
+* Structured AI responses (cards, lists, quick actions)
 
 ---
 
 ## ✨ Key Features
 
-### 🤖 Adaptive AI Coaching
+### 🤖 Adaptive AI Coaching (Core Feature)
 
-* **Encouragement Seeker** → Motivational & positive
-* **Creative Explorer** → Variety-driven, engaging responses
-* **Goal Finisher** → Structured plans & milestones
+The chatbot supports **three predefined personalities**:
 
-### 🧠 Context-Aware Responses
+* **Encouragement Seeker**
+  Motivational, supportive, reassurance-focused responses
 
-* Coaching style changes over time (new vs. long-term users)
-* Uses lifestyle data to tailor suggestions
+* **Creative Explorer**
+  Engaging, creative, non-repetitive suggestions
 
-### 🛡️ Safety Guardrails
+* **Goal Finisher**
+  Structured plans, clear steps, and milestones
 
-* Automatically detects and refuses:
+Personality can be selected during onboarding or preset for demo purposes.
 
-  * Medical advice
-  * Injury treatment
-  * Medication or supplement guidance
+---
+
+### ⏱️ Usage Duration–Based Behavior
+
+The AI coaching style changes automatically based on how long the user has been using the app:
+
+| Days Using App | AI Behavior                     |
+| -------------- | ------------------------------- |
+| 0–3 days       | Empathetic, listening-focused   |
+| 4–8 days       | Friendly, balanced suggestions  |
+| 9+ days        | Coach-like, actionable guidance |
+
+---
+
+### 🧠 Lifestyle Context Awareness
+
+The chatbot considers **dummy lifestyle data**:
+
+```json
+{
+  "steps": 4200,
+  "exerciseMinutes": 25,
+  "sleepHours": 5.5
+}
+```
+
+This data is injected into every AI prompt to personalize responses (e.g., encouraging walking if steps are low or rest if sleep is insufficient).
+
+---
 
 ### 📋 Structured AI Responses
 
-* Day-wise workout plans (card layout)
-* Bullet-point fitness tips
-* Quick action suggestion pills
+AI responses are **never plain text blobs**. The app supports:
+
+* ✅ Day-wise workout plans (card layout)
+* ✅ Bullet-point fitness tips
+* ✅ Follow-up quick action pills (e.g., *Beginner Plan*, *Warm-up*)
+
+---
+
+### 🛡️ Safety & Scope Guardrails
+
+The chatbot **politely refuses** to answer questions related to:
+
+* Diseases (e.g., diabetes, heart conditions)
+* Injuries (e.g., fractures, ligament tears)
+* Medications or supplements
+
+In such cases, it:
+
+* Clearly states it cannot provide medical advice
+* Suggests consulting certified healthcare professionals
+
+This is enforced via:
+
+* Keyword-based checks
+* System-level AI prompt rules
+
+---
 
 ### 🎮 Gamification
 
-* Coin reward system (1 coin per message)
-* Encourages consistent engagement
+* Users earn **1 coin per message**
+* Coin animation provides subtle engagement feedback
 
 ---
 
 ## 🛠️ Tech Stack
 
-**Frontend**
+### Frontend
 
-* React Native (Expo)
+* React Native (Expo – Managed Workflow)
 * Expo Router
 * AsyncStorage
 
-**Backend**
+### Backend
 
 * Node.js
 * Express
 * MongoDB (Atlas)
 
-**AI**
+### AI
 
-* OpenAI API (GPT-based)
+* **OpenAI API (GPT-based models)**
 
-**Deployment**
+### Deployment
 
 * Frontend: Vercel
 * Backend: Vercel (Serverless APIs)
-* Mobile Build: Expo EAS (Android APK)
+* Mobile Build: Expo EAS (Android)
 
 ---
 
@@ -95,7 +170,7 @@ npm install
 cd backend && npm install && cd ..
 ```
 
-### 3. Environment variables
+### 3. Environment Variables
 
 **Backend (`backend/.env`)**
 
@@ -122,42 +197,78 @@ npm start
 npm start
 ```
 
-Scan the QR using **Expo Go** to run on mobile.
+Scan the QR code using **Expo Go** to run on a mobile device.
 
 ---
 
 ## 🧩 Architecture Highlights
 
-* Modular backend with clear separation of concerns
-* AI prompt composition based on:
+* Clean separation of frontend and backend concerns
+* Modular prompt composition using:
 
   * Safety rules
-  * Personality
-  * Usage duration
+  * Personality context
+  * Usage duration logic
   * Lifestyle data
-* Structured response parsing for improved UX
-* Clean component-based UI
+* Structured response parsing for better UI/UX
+* Scalable and readable component architecture
 
 ---
 
-## ⚠️ APK Note
+## 🤖 AI Usage Disclosure (Mandatory – Section 9.7)
 
-The Android APK requires a reachable backend API.
+**AI Tool Used:** OpenAI API (GPT-based models)
 
-* The app works fully via:
+The AI is used exclusively to generate:
 
-  * Web deployment
-  * Expo development builds
-* For production-grade APKs, a persistent backend platform (e.g., Render/Railway) is recommended.
+* Workout plans
+* Fitness tips
+* Motivation and coaching responses
+* General wellness guidance (non-medical)
+
+### Prompt Composition Strategy
+
+Each AI request combines:
+
+* User personality
+* App usage duration behavior
+* Lifestyle data (steps, exercise, sleep)
+* Safety instructions
+* User’s question
+
+Detailed prompt rules and examples are documented in **`AI_README.md`**.
 
 ---
 
-## 🔮 Future Improvements
+## 🎥 Demo Video
+
+A **2–5 minute screen-recorded demo** is provided, showcasing:
+
+* Welcome screen
+* Chat interactions
+* Personality-based responses
+* Usage-duration adaptation
+* Structured AI responses
+* Safety refusal examples
+
+---
+
+## 📦 APK Note
+
+The Android APK works with a reachable backend API.
+The recommended evaluation methods are:
+
+* Web deployment
+* Expo development builds
+
+---
+
+## 🔮 Future Enhancements
 
 * Wearable integrations (Google Fit / Apple Health)
-* Progress charts & analytics
-* Voice-based interaction
-* Authentication & user profiles
+* Progress charts and analytics
+* Voice input/output
+* Authentication & profiles
 * Offline support
 * Multi-language support
 
@@ -165,7 +276,7 @@ The Android APK requires a reachable backend API.
 
 ## 📄 License
 
-This project was developed as part of a technical assignment and is intended for educational/demo purposes.
+This project was developed for an assignment and is intended for educational/demo purposes.
 
 ---
 
