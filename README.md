@@ -1,8 +1,3 @@
-Perfect — here’s a **fully updated, recruiter-ready README.md**, aligned **line-by-line with the assignment**, clean, professional, and submission-safe.
-You can **replace your current README completely with this** 👇
-
----
-
 # 🏋️ Adaptive Fitness Companion Chatbot
 
 **(React Native + OpenAI API)**
